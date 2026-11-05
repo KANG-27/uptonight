@@ -1,5 +1,9 @@
 'use client';
 
+import { Header } from '@/components/Header';
+import { PlanetList } from '@/components/PlanetList';
+import { SkyCompass } from '@/components/SkyCompass';
+import { TimeSlider } from '@/components/TimeSlider';
 import { useEffect, useState } from 'react';
 
 interface SkyPoint {
@@ -18,6 +22,9 @@ interface SkyObject {
 
 export default function Home() {
   const [objects, setObjects] = useState<SkyObject[]>([]);
+  const [place, setPlace] = useState<{ area: string | null; city: string | null } | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lon: number; alt: number | null } | null>(null);
+  const [hourIndex, setHourIndex] = useState(0);
   const [status, setStatus] = useState<'locating' | 'loading' | 'ready' | 'error'>('locating');
   const [error, setError] = useState('');
 
@@ -27,6 +34,12 @@ export default function Home() {
         setStatus('loading');
         const { latitude, longitude, altitude } = pos.coords;
         const alt = (altitude ?? 0) / 1000; // el navegador da metros, Horizons quiere km
+        fetch(`/api/place?lat=${latitude}&lon=${longitude}`)
+          .then((r) => r.json())
+          .then(setPlace)
+          .catch(() => setPlace(null));
+
+        setLocation({ lat: latitude, lon: longitude, alt: alt });
         try {
           const res = await fetch(`/api/sky?lat=${latitude}&lon=${longitude}&alt=${alt}`);
           if (!res.ok) throw new Error((await res.json()).error);
@@ -48,17 +61,56 @@ export default function Home() {
   if (status === 'loading') return <p className="p-8">Consultando a la NASA…</p>;
   if (status === 'error') return <p className="p-8 text-red-500">{error}</p>;
 
+
+
+
+  function nightLabel(now: Date = new Date()): string {
+    // Antes de las 6 a. m., "esta noche" empezó ayer
+    const start = new Date(now);
+    if (now.getHours() < 6) start.setDate(start.getDate() - 1);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const weekday = (d: Date) => new Intl.DateTimeFormat('es-CO', { weekday: 'long' }).format(d);
+    const month = (d: Date) => new Intl.DateTimeFormat('es-CO', { month: 'long' }).format(d);
+    const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+    const from = `${capitalize(weekday(start))} ${start.getDate()}`;
+    const to = `${weekday(end)} ${end.getDate()} de ${month(end)}`;
+
+    return start.getMonth() === end.getMonth()
+      ? `${from} al ${to}`
+      : `${from} de ${month(start)} al ${to}`;
+  }
+
+  const placeName = place?.area ?? place?.city ?? 'tu ubicación';
+
+  
+  
+
+
   return (
-    <main className="p-8 max-w-xl mx-auto">
-      <h1 className="text-2xl font-medium mb-6">UpTonight</h1>
-      <ul className="space-y-3">
-        {objects.map((obj) => (
-          <li key={obj.id} className="border rounded-lg p-4">
-            <p className="font-medium">{obj.name}</p>
-            {/* TODO: mostrar si es visible ahora y hacia dónde mirar */}
-          </li>
-        ))}
-      </ul>
+    <main className="min-h-screen p-8 bg-[#0A0F1D] text-[#EDE6D6]">
+
+      <Header location={location} />
+
+      <section className="grid grid-cols-2 md:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          <h1>El cielo de esta noche sobre {placeName}</h1>
+          <p className="text-sm text-[#A8A293]">
+            {nightLabel()}
+          </p>
+
+          <TimeSlider objects={objects} hourIndex={hourIndex} setHourIndex={setHourIndex} />
+          <PlanetList objects={objects} hourIndex={hourIndex} />
+        </div>
+
+        <div className="relative w-full aspect-square">
+          <SkyCompass />
+        </div>
+
+      </section>
     </main>
   );
 }
