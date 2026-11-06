@@ -86,8 +86,8 @@ export default function Home() {
 
   const placeName = place?.area ?? place?.city ?? 'tu ubicación';
 
-  
-  
+
+
 
 
   return (
@@ -107,7 +107,17 @@ export default function Home() {
         </div>
 
         <div className="relative w-full aspect-square">
-          <SkyCompass />
+          <SkyCompass
+            objects={objects.map((obj) => ({
+              id: obj.id,
+              name: obj.name,
+              color: '#E07A5A',
+              azimuth: obj.points[hourIndex].azimuth,
+              elevation: obj.points[hourIndex].elevation,
+              pastPath: obj.points.slice(0, hourIndex + 1),   // desde el inicio hasta ahora
+              futurePath: obj.points.slice(hourIndex),        // desde ahora hasta el final
+            }))}
+          />
         </div>
 
       </section>
