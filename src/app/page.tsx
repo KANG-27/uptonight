@@ -25,6 +25,7 @@ export default function Home() {
   const [place, setPlace] = useState<{ area: string | null; city: string | null } | null>(null);
   const [location, setLocation] = useState<{ lat: number; lon: number; alt: number | null } | null>(null);
   const [hourIndex, setHourIndex] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState<'locating' | 'loading' | 'ready' | 'error'>('locating');
   const [error, setError] = useState('');
 
@@ -90,36 +91,64 @@ export default function Home() {
 
 
 
-  return (
-    <main className="min-h-screen p-8 bg-[#0A0F1D] text-[#EDE6D6]">
+  const belowNames = objects
+    .filter((o) => (o.points[hourIndex]?.elevation ?? -1) < 0)
+    .map((o) => o.name);
 
+  return (
+    <main className="min-h-screen bg-[#0A0F1D] px-6 py-6 text-[#EDE6D6] md:px-8">
       <Header location={location} />
 
-      <section className="grid grid-cols-2 md:grid-cols-2 gap-8">
-        <div className="space-y-4">
-          <h1>El cielo de esta noche sobre {placeName}</h1>
-          <p className="text-sm text-[#A8A293]">
-            {nightLabel()}
-          </p>
+      <section className="grid gap-12 md:grid-cols-2 md:gap-10">
+        <div>
+          <h1 className="font-serif text-5xl leading-[1.05] md:text-6xl">
+            El cielo de esta noche <em className="text-[#C9A45C]">sobre {placeName}</em>
+          </h1>
+          <p className="mt-4 text-sm text-[#A8A293]">{nightLabel()}</p>
 
-          <TimeSlider objects={objects} hourIndex={hourIndex} setHourIndex={setHourIndex} />
-          <PlanetList objects={objects} hourIndex={hourIndex} />
+          <div className="mt-8">
+            <TimeSlider objects={objects} hourIndex={hourIndex} setHourIndex={setHourIndex} />
+          </div>
+
+          <div className="mt-6">
+            <PlanetList
+              objects={objects}
+              hourIndex={hourIndex}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          </div>
         </div>
 
-        <div className="relative w-full aspect-square">
+        <div className="px-8 pt-8">
           <SkyCompass
+            selectedId={selectedId}
+            onSelect={setSelectedId}
             objects={objects.map((obj) => ({
               id: obj.id,
               name: obj.name,
               color: '#E07A5A',
               azimuth: obj.points[hourIndex].azimuth,
               elevation: obj.points[hourIndex].elevation,
-              pastPath: obj.points.slice(0, hourIndex + 1),   // desde el inicio hasta ahora
-              futurePath: obj.points.slice(hourIndex),        // desde ahora hasta el final
+              timeUTC: obj.points[hourIndex].timeUTC,
+              pastPath: obj.points.slice(0, hourIndex + 1), // desde el inicio hasta ahora
+              futurePath: obj.points.slice(hourIndex), // desde ahora hasta el final
             }))}
           />
-        </div>
 
+          <div className="mt-12 space-y-3 text-center text-xs text-[#A8A293]">
+            {belowNames.length > 0 && (
+              <p className="text-sm">
+                Todavía bajo el horizonte:{' '}
+                <em className="font-serif text-base text-[#EDE6D6]">{belowNames.join(', ')}</em>
+              </p>
+            )}
+            <p className="mx-auto max-w-sm">
+              El borde es tu horizonte; el centro, el punto justo sobre tu cabeza. Las líneas punteadas son
+              el camino de cada planeta durante la noche. Toca un planeta para ver sus coordenadas.
+            </p>
+          </div>
+        </div>
       </section>
     </main>
   );

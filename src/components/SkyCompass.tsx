@@ -1,11 +1,15 @@
 'use client';
 
+import { direction, formatHour } from '@/lib/sky';
+import { PlanetIcon } from './PlanetIcon';
+
 interface CompassObject {
     id: string;
     name: string;
     color: string;
     azimuth: number;
     elevation: number;
+    timeUTC?: string;
     pastPath: { azimuth: number; elevation: number }[];
     futurePath: { azimuth: number; elevation: number }[];
 }
@@ -29,7 +33,16 @@ function toTrail(path: { azimuth: number; elevation: number }[]): string {
         .join(' ');
 }
 
-export function SkyCompass({ objects }: { objects: CompassObject[] }) {
+interface SkyCompassProps {
+    objects: CompassObject[];
+    selectedId?: string | null;
+    onSelect?: (id: string | null) => void;
+}
+
+const fmtDeg = (n: number) =>
+    new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+export function SkyCompass({ objects, selectedId = null, onSelect }: SkyCompassProps) {
     const visible = objects.filter((o) => o.elevation >= 0);
     const ticks = Array.from({ length: 72 }, (_, i) => i * 5);
     const numbers = Array.from({ length: 12 }, (_, i) => i * 30).filter((n) => n % 90 !== 0);
@@ -81,53 +94,98 @@ export function SkyCompass({ objects }: { objects: CompassObject[] }) {
                 </div>
             ))}
 
-            {/* Los planetas */}
-            {visible.map((o) => {
-                const { x, y } = toXY(o.azimuth, o.elevation);
-                return (
-                    <div
-                        key={o.id}
-                        className="absolute -translate-x-1/2 -translate-y-1/2"
-                        style={{ left: `${x}%`, top: `${y}%` }}
-                    >
-                        <div className="h-3 w-3 rounded-full" style={{ backgroundColor: o.color }} />
-                        <span className="absolute left-5 top-1/2 -translate-y-1/2 whitespace-nowrap text-sm text-[#EDE6D6]">
-                            {o.name}
-                        </span>
-                    </div>
-                );
-            })}
+            {/* Caminos: todos, o solo el del planeta seleccionado */}
             <svg
                 viewBox="0 0 100 100"
                 className="pointer-events-none absolute inset-0 h-full w-full"
                 aria-hidden="true"
             >
-                {objects.map((o) => (
-                    <g key={o.id}>
-                        {/* Lo que falta: tenue y punteado */}
-                        <polyline
-                            points={toTrail(o.futurePath)}
-                            fill="none"
-                            stroke="#EDE6D6"
-                            strokeOpacity={0.2}
-                            strokeWidth={1.5}
-                            strokeDasharray="2 4"
-                            strokeLinecap="round"
-                            vectorEffect="non-scaling-stroke"
-                        />
-                        {/* Lo recorrido: del color del planeta, más visible */}
-                        <polyline
-                            points={toTrail(o.pastPath)}
-                            fill="none"
-                            stroke={o.color}
-                            strokeOpacity={0.6}
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    </g>
-                ))}
+                {objects
+                    .filter((o) => !selectedId || o.id === selectedId)
+                    .map((o) => {
+                        const selected = o.id === selectedId;
+                        return (
+                            <g key={o.id}>
+                                {/* Lo que falta: tenue y punteado */}
+                                <polyline
+                                    points={toTrail(o.futurePath)}
+                                    fill="none"
+                                    stroke="#EDE6D6"
+                                    strokeOpacity={selected ? 0.45 : 0.2}
+                                    strokeWidth={1.5}
+                                    strokeDasharray="2 4"
+                                    strokeLinecap="round"
+                                    vectorEffect="non-scaling-stroke"
+                                />
+                                {/* Lo recorrido: del color del planeta, más visible */}
+                                <polyline
+                                    points={toTrail(o.pastPath)}
+                                    fill="none"
+                                    stroke={o.color}
+                                    strokeOpacity={selected ? 0.9 : 0.6}
+                                    strokeWidth={selected ? 2.5 : 2}
+                                    strokeLinecap="round"
+                                    vectorEffect="non-scaling-stroke"
+                                />
+                            </g>
+                        );
+                    })}
             </svg>
+
+            {/* Los planetas: al hacer clic se seleccionan y muestran sus coordenadas */}
+            {visible.map((o) => {
+                const { x, y } = toXY(o.azimuth, o.elevation);
+                const selected = o.id === selectedId;
+                const dimmed = selectedId !== null && !selected;
+                const tooltipBelow = y < 25; // cerca del borde de arriba, mostrarlo abajo
+
+                return (
+                    <div
+                        key={o.id}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 transition-opacity ${
+                            dimmed ? 'opacity-30' : ''
+                        } ${selected ? 'z-20' : 'z-10'}`}
+                        style={{ left: `${x}%`, top: `${y}%` }}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => onSelect?.(selected ? null : o.id)}
+                            aria-pressed={selected}
+                            aria-label={`${o.name}: azimut ${fmtDeg(o.azimuth)}°, altura ${fmtDeg(o.elevation)}°`}
+                            className={`relative flex items-center justify-center rounded-full transition-transform hover:scale-125 ${
+                                selected ? 'scale-125 ring-1 ring-[#C9A45C] ring-offset-2 ring-offset-[#0E1527]' : ''
+                            }`}
+                        >
+                            <PlanetIcon id={o.id} size={o.id === '699' ? 26 : 18} />
+                        </button>
+
+                        {!selected && (
+                            <span className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap leading-tight">
+                                <span className="block font-serif text-sm text-[#EDE6D6]">{o.name}</span>
+                                <span className="block font-mono text-[10px] text-[#C9A45C]">
+                                    {o.elevation.toFixed(0)}°
+                                </span>
+                            </span>
+                        )}
+
+                        {selected && (
+                            <div
+                                className={`pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[#C9A45C]/40 bg-[#0A0F1D]/95 px-3 py-2 shadow-lg ${
+                                    tooltipBelow ? 'top-full mt-3' : 'bottom-full mb-3'
+                                }`}
+                            >
+                                <p className="font-serif text-base leading-tight text-[#EDE6D6]">{o.name}</p>
+                                <p className="font-mono text-[11px] text-[#A8A293]">
+                                    Az {fmtDeg(o.azimuth)}° ({direction(o.azimuth).short}) · Alt {fmtDeg(o.elevation)}°
+                                </p>
+                                {o.timeUTC && (
+                                    <p className="font-mono text-[10px] text-[#A8A293]/80">a las {formatHour(o.timeUTC)}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
         </div >
     );
 }
